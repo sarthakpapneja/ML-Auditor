@@ -46,7 +46,7 @@ def compute_fairness_metrics(model: Any, X: pd.DataFrame, y: pd.Series,
         return results
 
     try:
-        X_numeric = X.select_dtypes(include=[np.number])
+        X_numeric = X.select_dtypes(include=[np.number, bool]).astype(float)
         y_pred = model.predict(X_numeric.values)
     except Exception as e:
         results["warnings"].append(f"Could not generate predictions: {str(e)}")

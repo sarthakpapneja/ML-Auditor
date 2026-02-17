@@ -15,7 +15,7 @@ def detect_overfitting(model: Any, X: pd.DataFrame, y: pd.Series,
     Detect overfitting by comparing train/test splits and cross-validation.
     Returns overfit score (0-100) and warning level.
     """
-    X_vals = X.select_dtypes(include=[np.number]).values
+    X_vals = X.select_dtypes(include=[np.number, bool]).astype(float).values
     y_vals = y.values
 
     result = {

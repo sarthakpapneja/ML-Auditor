@@ -28,7 +28,7 @@ def detect_leakage(model: Any, X: pd.DataFrame, y: pd.Series,
         "recommendations": [],
     }
 
-    numeric_X = X.select_dtypes(include=[np.number])
+    numeric_X = X.select_dtypes(include=[np.number, bool]).astype(float)
 
     # --- 1. ID Column Detection ---
     for col in X.columns:

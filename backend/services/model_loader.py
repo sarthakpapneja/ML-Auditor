@@ -15,6 +15,12 @@ def load_model(filepath: str) -> Any:
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == ".pkl":
+        # Try joblib first (sklearn models are often saved via joblib even with .pkl ext)
+        try:
+            model = joblib.load(filepath)
+            return model
+        except Exception:
+            pass
         with open(filepath, "rb") as f:
             model = pickle.load(f)
         return model

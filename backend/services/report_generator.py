@@ -12,14 +12,15 @@ from typing import Any
 REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
 
 
-def generate_json_report(audit_id: str, results: dict) -> str:
+def generate_json_report(audit_id: str, results: dict, metadata: dict = None) -> str:
     """Generate a JSON report file and return its path."""
     os.makedirs(REPORTS_DIR, exist_ok=True)
     path = os.path.join(REPORTS_DIR, f"{audit_id}.json")
 
     report = {
         "audit_id": audit_id,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "metadata": metadata or {},
         "results": results,
     }
 
@@ -64,7 +65,8 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
             pdf.cell(0, 10, "Component Scores:", ln=True)
             pdf.set_font("Helvetica", "", 11)
             for comp, val in components.items():
-                pdf.cell(0, 8, f"  {comp.capitalize()}: {val}/100", ln=True)
+                v = f"{val:.2f}" if isinstance(val, (int, float)) else str(val)
+                pdf.multi_cell(0, 7, f"  {comp.replace('_', ' ').capitalize()}: {v}/100", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
 
         # Warnings
@@ -74,7 +76,7 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
             pdf.cell(0, 10, "Warnings:", ln=True)
             pdf.set_font("Helvetica", "", 11)
             for w in warnings:
-                pdf.cell(0, 8, f"  ! {w}", ln=True)
+                pdf.multi_cell(0, 7, f"  ! {w}", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
 
         # Recommendations
@@ -84,7 +86,7 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
             pdf.cell(0, 10, "Recommendations:", ln=True)
             pdf.set_font("Helvetica", "", 11)
             for r in recs:
-                pdf.multi_cell(0, 7, f"  - {r}")
+                pdf.multi_cell(0, 7, f"  - {r}", new_x="LMARGIN", new_y="NEXT")
             pdf.ln(5)
 
     # --- Performance Metrics ---
@@ -112,7 +114,7 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
         pdf.set_font("Helvetica", "B", 16)
         pdf.cell(0, 12, "Overfitting Analysis", ln=True)
         pdf.set_font("Helvetica", "", 11)
-        pdf.multi_cell(0, 7, overfit.get("details", "No details available."))
+        pdf.multi_cell(0, 7, overfit.get("details", "No details available."), new_x="LMARGIN", new_y="NEXT")
         _add_metric(pdf, "Train Score", overfit.get("train_score"))
         _add_metric(pdf, "Test Score", overfit.get("test_score"))
         _add_metric(pdf, "Warning Level", overfit.get("warning_level"))
@@ -127,7 +129,7 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
         _add_metric(pdf, "Overall Fairness Score", fairness.get("overall_fairness_score"))
 
         for w in fairness.get("warnings", []):
-            pdf.multi_cell(0, 7, f"  ! {w}")
+            pdf.multi_cell(0, 7, f"  ! {w}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
 
     # --- Drift ---
@@ -136,7 +138,7 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
         pdf.set_font("Helvetica", "B", 16)
         pdf.cell(0, 12, "Data Drift Analysis", ln=True)
         pdf.set_font("Helvetica", "", 11)
-        pdf.multi_cell(0, 7, drift.get("summary", "No summary available."))
+        pdf.multi_cell(0, 7, drift.get("summary", "No summary available."), new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
 
     # --- Leakage ---
@@ -146,9 +148,9 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
         pdf.cell(0, 12, "Feature Leakage Analysis", ln=True)
         pdf.set_font("Helvetica", "", 11)
         for w in leakage.get("warnings", []):
-            pdf.multi_cell(0, 7, f"  ! {w}")
+            pdf.multi_cell(0, 7, f"  ! {w}", new_x="LMARGIN", new_y="NEXT")
         for r in leakage.get("recommendations", []):
-            pdf.multi_cell(0, 7, f"  - {r}")
+            pdf.multi_cell(0, 7, f"  - {r}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
 
     # --- Explainability ---
@@ -158,7 +160,9 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
         pdf.cell(0, 12, "Feature Importance (SHAP)", ln=True)
         pdf.set_font("Helvetica", "", 11)
         for feat in explainability["top_features"][:10]:
-            pdf.cell(0, 7, f"  {feat['feature']}: {feat['importance']}", ln=True)
+            imp = feat['importance']
+            v = f"{imp:.4f}" if isinstance(imp, (int, float)) else str(imp)
+            pdf.multi_cell(0, 7, f"  {feat['feature']}: {v}", new_x="LMARGIN", new_y="NEXT")
 
     pdf.output(path)
     return path
@@ -167,4 +171,8 @@ def generate_pdf_report(audit_id: str, results: dict) -> str:
 def _add_metric(pdf, name: str, value: Any):
     """Add a single metric line to the PDF."""
     if value is not None:
-        pdf.cell(0, 7, f"  {name}: {value}", ln=True)
+        if isinstance(value, float):
+            val_str = f"{value:.4f}"
+        else:
+            val_str = str(value)
+        pdf.multi_cell(0, 7, f"  {name}: {val_str}", new_x="LMARGIN", new_y="NEXT")

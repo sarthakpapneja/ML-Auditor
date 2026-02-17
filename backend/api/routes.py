@@ -239,8 +239,8 @@ def _run_audit_pipeline(audit_id: str, model_path: str, dataset_path: str,
         if task_type == "auto":
             task_type = detect_task_type(model, y)
 
-        # Get numeric features for model
-        X_numeric = X.select_dtypes(include=[np.number])
+        # Get numeric features for model, including bools (one-hot dummies)
+        X_numeric = X.select_dtypes(include=[np.number, bool]).astype(float)
 
         # 4. Evaluation
         evaluation = evaluate_model(model, X_numeric, y, task_type)
@@ -285,9 +285,25 @@ def _run_audit_pipeline(audit_id: str, model_path: str, dataset_path: str,
             "health_score": health,
         }
 
+        # metadata for re-configuration
+        metadata = {
+            "model_filename": os.path.basename(model_path),
+            "dataset_filename": os.path.basename(dataset_path),
+            "target_column": target_column,
+            "task_type": task_type,
+            "columns": df.columns.tolist()
+        }
+
         # Generate reports
-        json_path = generate_json_report(audit_id, results)
-        pdf_path = generate_pdf_report(audit_id, results)
+        json_path = generate_json_report(audit_id, results, metadata)
+        
+        pdf_path = None
+        try:
+            pdf_path = generate_pdf_report(audit_id, results)
+        except Exception as pdf_err:
+            import traceback
+            print(f"PDF Generation failed for {audit_id}: {pdf_err}")
+            traceback.print_exc()
 
         update_audit(
             audit_id,

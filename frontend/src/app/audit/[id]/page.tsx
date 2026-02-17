@@ -10,6 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { runAudit } from "@/lib/api";
 import {
     BarChart,
     Bar,
@@ -44,11 +47,20 @@ import {
     RefreshCw,
     TrendingUp,
     TrendingDown,
+    Settings2,
+    ChevronRight,
 } from "lucide-react";
 
 interface AuditResults {
     audit_id: string;
     generated_at: string;
+    metadata?: {
+        model_filename: string;
+        dataset_filename: string;
+        target_column: string;
+        task_type: string;
+        columns: string[];
+    };
     results: {
         evaluation: any;
         overfitting: any;
@@ -68,6 +80,9 @@ export default function AuditDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [polling, setPolling] = useState(true);
+    const [reconfigLoading, setReconfigLoading] = useState(false);
+    const [targetCol, setTargetCol] = useState("");
+    const [tType, setTType] = useState("");
 
     const fetchReport = useCallback(async () => {
         try {
@@ -91,6 +106,13 @@ export default function AuditDashboard() {
     }, [auditId]);
 
     useEffect(() => {
+        if (data?.metadata) {
+            setTargetCol(data.metadata.target_column);
+            setTType(data.metadata.task_type);
+        }
+    }, [data]);
+
+    useEffect(() => {
         let interval: NodeJS.Timeout;
 
         const startPolling = async () => {
@@ -106,6 +128,23 @@ export default function AuditDashboard() {
         startPolling();
         return () => clearInterval(interval);
     }, [fetchReport]);
+
+    const handleReRun = async () => {
+        if (!data?.metadata) return;
+        setReconfigLoading(true);
+        try {
+            const res = await runAudit({
+                model_filename: data.metadata.model_filename,
+                dataset_filename: data.metadata.dataset_filename,
+                target_column: targetCol,
+                task_type: tType,
+            });
+            window.location.href = `/audit/${res.audit_id}`;
+        } catch (err: any) {
+            setError(err?.response?.data?.detail || "Failed to start audit");
+            setReconfigLoading(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -211,6 +250,10 @@ export default function AuditDashboard() {
                     <TabsTrigger value="explainability" className="gap-2 data-[state=active]:bg-violet-600 data-[state=active]:text-white">
                         <Brain className="w-4 h-4" /> SHAP
                     </TabsTrigger>
+                    <TabsTrigger value="configure" className="text-violet-400 gap-2">
+                        <Settings2 className="w-4 h-4" />
+                        Configure
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="performance" className="mt-6">
@@ -235,6 +278,68 @@ export default function AuditDashboard() {
 
                 <TabsContent value="explainability" className="mt-6">
                     <ExplainabilityTab explainability={r.explainability} />
+                </TabsContent>
+
+                <TabsContent value="configure" className="mt-6">
+                    <Card className="bg-zinc-900/50 border-zinc-800/60 max-w-2xl mx-auto">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Settings2 className="w-5 h-5 text-violet-400" />
+                                Re-Configure Audit
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label className="text-zinc-300">Target Column</Label>
+                                    <Select value={targetCol} onValueChange={setTargetCol}>
+                                        <SelectTrigger className="bg-zinc-800/50 border-zinc-700/60">
+                                            <SelectValue placeholder="Select target column" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                                            {(data.metadata?.columns || []).map((col) => (
+                                                <SelectItem key={col} value={col}>
+                                                    {col}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-zinc-300">Task Type</Label>
+                                    <Select value={tType} onValueChange={setTType}>
+                                        <SelectTrigger className="bg-zinc-800/50 border-zinc-700/60">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                                            <SelectItem value="classification">Classification</SelectItem>
+                                            <SelectItem value="regression">Regression</SelectItem>
+                                            <SelectItem value="auto">Auto-Detect</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+
+                            <Button
+                                onClick={handleReRun}
+                                disabled={reconfigLoading || !targetCol}
+                                className="w-full bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 text-white font-semibold h-12 text-base"
+                            >
+                                {reconfigLoading ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                                        Starting New Audit...
+                                    </>
+                                ) : (
+                                    <>
+                                        Run New Audit with These Settings
+                                        <ChevronRight className="w-5 h-5 ml-2" />
+                                    </>
+                                )}
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
             </Tabs>
 
@@ -305,10 +410,10 @@ function HealthScoreCard({ health }: { health: any }) {
                                 <div className="flex items-center gap-3 mt-4 justify-center md:justify-start">
                                     <Badge
                                         className={`text-lg px-4 py-1 ${score >= 80
-                                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                                : score >= 60
-                                                    ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-                                                    : "bg-red-500/20 text-red-400 border-red-500/30"
+                                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                            : score >= 60
+                                                ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                                                : "bg-red-500/20 text-red-400 border-red-500/30"
                                             }`}
                                     >
                                         Grade {health.grade}
@@ -379,10 +484,10 @@ function PerformanceTab({ evaluation }: { evaluation: any }) {
         ];
 
     const chartData = metrics
-        .filter((m) => m.value !== null && m.value !== undefined)
+        .filter((m) => m.value !== null && m.value !== undefined && !isNaN(m.value))
         .map((m) => ({
             name: m.name,
-            value: m.format === "%" ? +(m.value * 100).toFixed(1) : +m.value,
+            value: m.format === "%" ? +(m.value * 100).toFixed(1) || 0 : +m.value || 0,
         }));
 
     return (
@@ -471,8 +576,8 @@ function FairnessTab({ fairness }: { fairness: any }) {
                 const groups = Object.entries(metrics.groups || {});
                 const chartData = groups.map(([group, vals]: [string, any]) => ({
                     group,
-                    positive_rate: +(vals.positive_rate * 100).toFixed(1),
-                    accuracy: vals.accuracy ? +(vals.accuracy * 100).toFixed(1) : 0,
+                    positive_rate: +(vals.positive_rate * 100).toFixed(1) || 0,
+                    accuracy: vals.accuracy ? +(vals.accuracy * 100).toFixed(1) || 0 : 0,
                 }));
 
                 return (
@@ -530,8 +635,8 @@ function DriftTab({ drift }: { drift: any }) {
     const featureData = Object.entries(drift.feature_details || {}).map(
         ([feat, detail]: [string, any]) => ({
             feature: feat,
-            psi: detail.psi,
-            ks_stat: detail.ks_statistic,
+            psi: detail.psi || 0,
+            ks_stat: detail.ks_statistic || 0,
             drifted: detail.drifted,
             severity: detail.severity,
         })
@@ -614,11 +719,11 @@ function OverfittingTab({ overfitting }: { overfitting: any }) {
     const compareData = [
         {
             name: "Train",
-            score: overfitting.train_score ? +(overfitting.train_score * 100).toFixed(1) : 0,
+            score: overfitting.train_score ? +(overfitting.train_score * 100).toFixed(1) || 0 : 0,
         },
         {
             name: "Test",
-            score: overfitting.test_score ? +(overfitting.test_score * 100).toFixed(1) : 0,
+            score: overfitting.test_score ? +(overfitting.test_score * 100).toFixed(1) || 0 : 0,
         },
     ];
 
@@ -822,7 +927,7 @@ function ExplainabilityTab({ explainability }: { explainability: any }) {
     const topFeatures = explainability.top_features || [];
     const chartData = topFeatures.map((f: any) => ({
         feature: f.feature,
-        importance: +f.importance.toFixed(4),
+        importance: +(f.importance || 0).toFixed(4) || 0,
     }));
 
     return (

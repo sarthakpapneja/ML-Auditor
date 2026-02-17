@@ -1,39 +1,15 @@
-# ModelAuditAI
 
-## Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-## Virtual environments
-.venv/
-venv/
-env/
-
-## IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+backend/venv
+backend/__pycache__
+backend/audit_response.json
+backend/model_audit.db
+backend/reports
+backend/uploads
+backend/.system_generated
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/build
 .DS_Store
-
-## Backend
-backend/uploads/
-backend/reports/
-backend/metadata.db
-*.pkl
-*.joblib
-*.onnx
-
-## Frontend
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-
-## Docker
-docker-compose.override.yml
-
-## Demo generated files
-demo/sample_model.pkl
-demo/sample_dataset.csv
-demo/sample_dataset_encoded.csv
+*.pyc
+*.pyo
